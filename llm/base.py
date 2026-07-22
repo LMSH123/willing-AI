@@ -4,6 +4,8 @@
 定义所有大模型客户端必须实现的接口。
 """
 
+import base64
+import os
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Generator, Any, Tuple
 
@@ -14,7 +16,7 @@ class BaseLLMClient(ABC):
     @abstractmethod
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> str:
@@ -34,7 +36,7 @@ class BaseLLMClient(ABC):
     @abstractmethod
     def stream_chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> Generator[str, None, None]:
@@ -51,9 +53,52 @@ class BaseLLMClient(ABC):
         """
         ...
 
+    @property
+    def supports_vision(self) -> bool:
+        """
+        当前客户端是否支持图片输入（视觉识别）
+        子类可覆盖此属性
+        """
+        return False
+
+    @staticmethod
+    def build_multimodal_message(text: str, image_base64_list: List[str]) -> List[Dict]:
+        """
+        构建多模态消息（文本 + 图片）
+
+        Args:
+            text: 用户输入的文本
+            image_base64_list: 图片的 base64 编码列表（不含 data:image/... 前缀）
+
+        Returns:
+            符合 OpenAI 多模态格式的消息列表
+        """
+        content: List[Dict] = [{"type": "text", "text": text}]
+        for b64 in image_base64_list:
+            # 判断图片格式（从 base64 头部推断）
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+            })
+        return [{"role": "user", "content": content}]
+
+    @staticmethod
+    def image_file_to_base64(file_path: str) -> str:
+        """
+        将图片文件转换为 base64 编码
+
+        Args:
+            file_path: 图片文件路径
+
+        Returns:
+            base64 编码的字符串
+        """
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+
     def chat_with_tools(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tool_registry: Any,
         max_tool_rounds: int = 5,
         **kwargs: Any,
@@ -113,7 +158,7 @@ class BaseLLMClient(ABC):
 
     def stream_chat_with_tools(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tool_registry: Any,
         max_tool_rounds: int = 5,
         **kwargs: Any,

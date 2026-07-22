@@ -53,6 +53,7 @@
                     <div class="welcome-tips">
                         <div class="tip">💬 在下方输入框开始对话</div>
                         <div class="tip">📄 拖拽文档到侧边栏上传</div>
+                        <div class="tip">🖼️ 点击图片按钮上传图片，AI 帮你识别</div>
                         <div class="tip">🔍 我会自动联网搜索最新信息</div>
                     </div>
                 </div>
@@ -61,19 +62,26 @@
             <!-- 输入区域 -->
             <div class="input-area">
                 <div class="input-container">
-                    <textarea
-                        id="inputBox"
-                        class="input-box"
-                        placeholder="输入消息给乐意AI..."
-                        rows="1"
-                        oninput="autoResize(this)"
-                        onkeydown="handleKeyDown(event)"
-                    ></textarea>
-                    <button class="btn-send" id="sendBtn" onclick="sendMessage()">
-                        <span>➤</span>
-                    </button>
+                    <div class="image-preview" id="imagePreview"></div>
+                    <div class="input-row">
+                        <button class="btn-image" id="imageBtn" onclick="document.getElementById('imageInput').click()" title="上传图片">
+                            <span>🖼️</span>
+                        </button>
+                        <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+                        <textarea
+                            id="inputBox"
+                            class="input-box"
+                            placeholder="输入消息给乐意AI..."
+                            rows="1"
+                            oninput="autoResize(this)"
+                            onkeydown="handleKeyDown(event)"
+                        ></textarea>
+                        <button class="btn-send" id="sendBtn" onclick="sendMessage()">
+                            <span>➤</span>
+                        </button>
+                    </div>
                 </div>
-                <p class="input-footer">乐意AI 的回答仅供参考，请验证重要信息</p>
+                <p class="input-footer">乐意AI 的回答仅供参考，请验证重要信息 · 支持图片识别 🖼️</p>
             </div>
         </main>
     </div>

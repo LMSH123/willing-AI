@@ -9,6 +9,15 @@ from openai import OpenAI
 from .base import BaseLLMClient
 
 
+# 支持视觉能力的模型列表
+VISION_MODELS = [
+    "gpt-4o", "gpt-4o-mini", "gpt-4o-2024-08-06", "gpt-4o-2024-05-13",
+    "gpt-4-turbo", "gpt-4-vision-preview",
+    "claude-sonnet-4-6", "claude-3-5-sonnet", "claude-3-opus",
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+]
+
+
 class OpenAIClient(BaseLLMClient):
     """OpenAI API 客户端"""
 
@@ -41,6 +50,16 @@ class OpenAIClient(BaseLLMClient):
     def backend_name(self) -> str:
         return "openai"
 
+    @property
+    def supports_vision(self) -> bool:
+        """检查当前模型是否支持视觉识别"""
+        # ChatAnywhere 免费版不支持图片
+        base_url = str(self.client.base_url) if self.client.base_url else ""
+        if "chatanywhere" in base_url.lower():
+            return False
+        model_lower = self._model.lower()
+        return any(vm in model_lower for vm in VISION_MODELS)
+
     def _build_params(self, **kwargs: Any) -> dict:
         params = {
             "model": kwargs.pop("model", self._model),
@@ -54,7 +73,7 @@ class OpenAIClient(BaseLLMClient):
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> str:
@@ -68,7 +87,7 @@ class OpenAIClient(BaseLLMClient):
 
     def stream_chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> Generator[str, None, None]:

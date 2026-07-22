@@ -367,9 +367,6 @@ body {
 }
 
 .input-container {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
     max-width: 800px;
     margin: 0 auto;
     background: var(--bg-input);
@@ -381,6 +378,104 @@ body {
 
 .input-container:focus-within {
     border-color: var(--accent);
+}
+
+.input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+/* 图片预览区域 */
+.image-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.image-preview:empty {
+    display: none;
+    padding: 0;
+    border: none;
+}
+
+.image-preview-item {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.image-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-preview-remove {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: #ff4444;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.image-preview-item:hover .image-preview-remove {
+    opacity: 1;
+}
+
+/* 图片按钮 */
+.btn-image {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.btn-image:hover {
+    background: var(--bg-secondary);
+}
+
+/* 消息中的图片 */
+.message-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.message-image {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    transition: opacity 0.2s;
+}
+
+.message-image:hover {
+    opacity: 0.85;
 }
 
 .input-box {

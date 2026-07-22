@@ -1,11 +1,13 @@
 /**
  * 乐意AI - Web前端交互
- * 支持流式输出、文档上传、对话管理
+ * 支持流式输出、文档上传、对话管理、图片识别
  */
 
 let currentSessionId = null;
 let isStreaming = false;
 let abortController = null;
+let pendingImages = []; // 待发送的图片 base64 数据
+let pendingImageNames = []; // 待发送的图片文件名（用于显示）
 
 // 页面加载完成
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 文件上传
     setupFileUpload();
+    // 图片上传
+    setupImageUpload();
 });
 
 // ========================
@@ -105,17 +109,26 @@ async function deleteConversation(sessionId) {
 async function sendMessage() {
     const inputBox = document.getElementById('inputBox');
     const text = inputBox.value.trim();
-    if (!text || isStreaming) return;
+    if ((!text && pendingImages.length === 0) || isStreaming) return;
 
     // 隐藏欢迎消息
     document.getElementById('welcomeMessage')?.style.setProperty('display', 'none');
 
-    // 清空输入
+    // 显示用户消息（含图片）
+    let displayText = text || '查看图片';
+    if (pendingImages.length > 0) {
+        addMessageWithImages('user', displayText, pendingImages.slice());
+    } else {
+        addMessage('user', text);
+    }
+
+    // 清空输入和图片预览
     inputBox.value = '';
     autoResize(inputBox);
-
-    // 显示用户消息
-    addMessage('user', text);
+    const imagesToSend = pendingImages.slice();
+    pendingImages = [];
+    pendingImageNames = [];
+    updateImagePreview();
 
     // 禁用发送按钮
     setStreaming(true);
@@ -124,17 +137,15 @@ async function sendMessage() {
     const assistantDiv = addMessage('assistant', '', true);
     const bubble = assistantDiv.querySelector('.bubble');
 
-    // 准备消息
-    const messages = [{ role: 'user', content: text }];
-    if (currentSessionId) {
-        currentSessionId = null; // 让后端创建新会话或使用已有会话
-    }
-
     try {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, session_id: currentSessionId }),
+            body: JSON.stringify({
+                message: text,
+                session_id: currentSessionId,
+                images: imagesToSend,
+            }),
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -229,6 +240,44 @@ function addMessage(role, content, isLoading = false) {
     return div;
 }
 
+/**
+ * 添加带图片的消息
+ */
+function addMessageWithImages(role, text, imageBase64List) {
+    const messagesDiv = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    const label = role === 'user' ? '你' : '乐意AI';
+
+    div.innerHTML = `<span class="role-label">${label}</span>`;
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    // 添加图片缩略图
+    const imagesContainer = document.createElement('div');
+    imagesContainer.className = 'message-images';
+    for (const b64 of imageBase64List) {
+        const img = document.createElement('img');
+        img.src = `data:image/jpeg;base64,${b64}`;
+        img.className = 'message-image';
+        img.onclick = () => window.open(img.src, '_blank');
+        imagesContainer.appendChild(img);
+    }
+    bubble.appendChild(imagesContainer);
+
+    // 添加文字
+    if (text && text !== '查看图片') {
+        const textDiv = document.createElement('div');
+        textDiv.textContent = text;
+        bubble.appendChild(textDiv);
+    }
+
+    div.appendChild(bubble);
+    messagesDiv.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
 function renderMarkdown(element, text) {
     // 简单渲染：代码块、粗体、列表
     let html = escapeHtml(text);
@@ -317,6 +366,96 @@ async function uploadFile(file) {
 }
 
 // ========================
+// 图片上传
+// ========================
+
+function setupImageUpload() {
+    const imageInput = document.getElementById('imageInput');
+
+    imageInput.addEventListener('change', () => {
+        if (imageInput.files.length > 0) {
+            handleImageSelect(imageInput.files[0]);
+            imageInput.value = '';
+        }
+    });
+
+    // 支持拖拽图片到输入区域
+    const inputContainer = document.querySelector('.input-container');
+    inputContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.types.includes('Files')) {
+            inputContainer.style.borderColor = 'var(--accent)';
+        }
+    });
+
+    inputContainer.addEventListener('dragleave', () => {
+        inputContainer.style.borderColor = '';
+    });
+
+    inputContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        inputContainer.style.borderColor = '';
+        const files = e.dataTransfer.files;
+        for (const file of files) {
+            if (file.type.startsWith('image/')) {
+                handleImageSelect(file);
+            }
+        }
+    });
+}
+
+function handleImageSelect(file) {
+    // 验证文件类型
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+        alert('只支持 JPG/PNG/GIF/WebP 格式的图片');
+        return;
+    }
+
+    // 验证文件大小（10MB）
+    if (file.size > 10 * 1024 * 1024) {
+        alert('图片太大，请上传小于 10MB 的图片');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        // 去掉 data:image/...;base64, 前缀，只保留 base64 数据
+        const base64 = e.target.result.split(',')[1];
+        pendingImages.push(base64);
+        pendingImageNames.push(file.name);
+        updateImagePreview();
+    };
+    reader.readAsDataURL(file);
+}
+
+function updateImagePreview() {
+    const container = document.getElementById('imagePreview');
+    container.innerHTML = '';
+
+    for (let i = 0; i < pendingImages.length; i++) {
+        const preview = document.createElement('div');
+        preview.className = 'image-preview-item';
+
+        const img = document.createElement('img');
+        img.src = `data:image/jpeg;base64,${pendingImages[i]}`;
+        preview.appendChild(img);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'image-preview-remove';
+        removeBtn.innerHTML = '✕';
+        removeBtn.onclick = () => {
+            pendingImages.splice(i, 1);
+            pendingImageNames.splice(i, 1);
+            updateImagePreview();
+        };
+        preview.appendChild(removeBtn);
+
+        container.appendChild(preview);
+    }
+}
+
+// ========================
 // 信息加载
 // ========================
 
@@ -324,7 +463,8 @@ async function loadModelInfo() {
     try {
         const res = await fetch('/api/model');
         const data = await res.json();
-        document.getElementById('modelInfo').textContent = `${data.backend}: ${data.model}`;
+        const visionIcon = data.supports_vision ? ' 🖼️' : '';
+        document.getElementById('modelInfo').textContent = `${data.backend}: ${data.model}${visionIcon}`;
     } catch (e) {
         document.getElementById('modelInfo').textContent = '未连接';
     }

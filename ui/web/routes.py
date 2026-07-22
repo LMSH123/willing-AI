@@ -8,7 +8,8 @@ FastAPI 路由，提供聊天、文档管理、对话历史等API接口。
 import json
 import os
 import uuid
-from typing import Optional
+import base64
+from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
@@ -24,6 +25,7 @@ from memory.long_term import LongTermMemory
 # 数据目录
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 DOCUMENTS_DIR = os.path.join(DATA_DIR, "documents")
+IMAGES_DIR = os.path.join(DATA_DIR, "images")
 
 router = APIRouter()
 
@@ -39,6 +41,7 @@ active_sessions: dict = {}
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    images: List[str] = []  # base64 编码的图片列表
 
 
 class ChatResponse(BaseModel):
@@ -77,26 +80,44 @@ async def health():
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    """聊天接口（SSE流式）"""
+    """聊天接口（SSE流式），支持图片输入"""
     session = get_or_create_session(request.session_id)
-    session.add_message("user", request.message)
 
-    messages = session.get_context_window()
+    # 构建消息：如果有图片，使用多模态格式
+    has_images = bool(request.images) and llm_client and llm_client.supports_vision
+
+    if has_images:
+        # 多模态消息：文本 + 图片
+        multimodal_msg = BaseLLMClient.build_multimodal_message(request.message, request.images)
+        session.add_message("user", f"[图片] {request.message}" if request.message else "[图片]")
+        # 保存原始消息用于上下文
+        messages = session.get_context_window()
+        # 替换最后一条用户消息为多模态格式
+        messages = messages[:-1] + multimodal_msg
+    else:
+        session.add_message("user", request.message)
+        messages = session.get_context_window()
 
     async def generate():
         # 发送会话ID
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session.session_id})}\n\n"
 
+        # 如果模型不支持视觉但用户发了图片，提示
+        if request.images and not (llm_client and llm_client.supports_vision):
+            yield f"data: {json.dumps({'type': 'chunk', 'content': '⚠️ 当前模型不支持图片识别，请切换到 gpt-4o-mini 或 gpt-4o 等视觉模型。'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'content': '⚠️ 当前模型不支持图片识别'})}\n\n"
+            return
+
         full_response = ""
 
         try:
-            if tool_registry and tool_registry.has_tools():
-                # 带工具的流式对话
+            if tool_registry and tool_registry.has_tools() and not has_images:
+                # 带工具的流式对话（仅纯文本时使用工具）
                 for chunk in llm_client.stream_chat_with_tools(messages, tool_registry):
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
             else:
-                # 普通流式对话
+                # 普通流式对话（含图片时自动走此分支）
                 for chunk in llm_client.stream_chat(messages):
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
@@ -112,7 +133,19 @@ async def chat(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'done', 'content': full_response})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            error_msg = str(e)
+            # 处理 API 密钥不支持多模态的情况
+            if "403" in error_msg or "do not support multimodal" in error_msg.lower() or "does not support image" in error_msg.lower():
+                error_msg = (
+                    "⚠️ 当前 API 密钥不支持图片识别功能。\n\n"
+                    "可能的原因：\n"
+                    "1. **ChatAnywhere 免费版** 不支持图片分析，需要付费密钥\n"
+                    "2. 其他后端可能需要单独的视觉模型配额\n\n"
+                    "建议：\n"
+                    "• 使用 OpenAI 官方密钥直接连接\n"
+                    "• 或切换到支持视觉的模型后端"
+                )
+            yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -165,10 +198,45 @@ async def new_conversation():
 async def get_model_info():
     """获取模型信息"""
     if not llm_client:
-        return {"backend": "unknown", "model": "unknown"}
+        return {"backend": "unknown", "model": "unknown", "supports_vision": False}
     return {
         "backend": llm_client.backend_name,
         "model": llm_client.model_name,
+        "supports_vision": llm_client.supports_vision,
+    }
+
+
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    """上传图片，返回 base64 编码"""
+    # 验证文件类型
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"]
+    if file.content_type and file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"不支持的图片类型: {file.content_type}，支持 JPG/PNG/GIF/WebP")
+
+    content = await file.read()
+
+    # 限制文件大小（10MB）
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片太大，请上传小于 10MB 的图片")
+
+    # 保存到本地
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = os.path.join(IMAGES_DIR, filename)
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # 返回 base64
+    b64_data = base64.b64encode(content).decode("utf-8")
+
+    return {
+        "success": True,
+        "filename": filename,
+        "base64": b64_data,
+        "size": len(content),
+        "mime": file.content_type or "image/jpeg",
     }
 
 

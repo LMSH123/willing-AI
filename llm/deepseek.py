@@ -55,7 +55,7 @@ class DeepSeekClient(BaseLLMClient):
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> str:
@@ -69,7 +69,7 @@ class DeepSeekClient(BaseLLMClient):
 
     def stream_chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         **kwargs: Any,
     ) -> Generator[str, None, None]:
