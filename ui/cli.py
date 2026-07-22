@@ -114,7 +114,9 @@ class CLI:
         system_prompt = get_system_prompt()
         if tool_enabled:
             from conversation.system_prompts import TOOL_ENABLED_PROMPT
-            system_prompt += TOOL_ENABLED_PROMPT
+            from datetime import date
+            today = date.today().isoformat()
+            system_prompt += TOOL_ENABLED_PROMPT.format(current_date=today)
         self.session = ConversationSession(system_prompt=system_prompt)
 
     def run(self):

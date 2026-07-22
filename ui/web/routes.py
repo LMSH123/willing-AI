@@ -66,7 +66,9 @@ def get_or_create_session(session_id: Optional[str] = None) -> ConversationSessi
     system_prompt = get_system_prompt()
     if tool_registry and tool_registry.has_tools():
         from conversation.system_prompts import TOOL_ENABLED_PROMPT
-        system_prompt += TOOL_ENABLED_PROMPT
+        from datetime import date
+        today = date.today().isoformat()
+        system_prompt += TOOL_ENABLED_PROMPT.format(current_date=today)
     session = ConversationSession(session_id=sid, system_prompt=system_prompt)
     active_sessions[sid] = session
     return session
