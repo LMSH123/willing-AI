@@ -1,0 +1,40 @@
+# 乐意AI 配置文件
+
+llm:
+  # 后端选择: deepseek | openai | github | chatanywhere
+  backend: chatanywhere
+  # 模型名称
+  # chatanywhere 支持: gpt-4o-mini, deepseek-chat, deepseek-v3, deepseek-r1, claude-sonnet-4-6, etc.
+  model: gpt-4o-mini
+  # 温度参数 (0.0-2.0)，越高越创造性
+  temperature: 0.7
+  # 最大生成token数
+  max_tokens: 4096
+  # Top-p 采样
+  top_p: 0.9
+
+tools:
+  # 是否启用工具系统
+  enabled: true
+  # 各工具开关
+  web_search: true
+  calculator: true
+  weather: true
+
+knowledge:
+  # 文本分块大小
+  chunk_size: 500
+  # 分块重叠
+  chunk_overlap: 50
+  # 检索返回数量
+  top_k: 3
+  # 嵌入模型
+  embedding_model: default
+
+ui:
+  # 默认模式: cli | web
+  default_mode: cli
+  web:
+    host: 127.0.0.1
+    port: 8000
+    debug: false

@@ -1,0 +1,24 @@
+# 乐意AI - Git忽略规则
+
+# 环境变量（含API密钥）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 数据文件（用户数据，不提交）
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
