@@ -4,8 +4,8 @@ llm:
   # 后端选择: deepseek | openai | github | chatanywhere
   backend: github
   # 模型名称
-  # github 支持: gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, etc.
-  model: gpt-4o
+  # github 支持: gpt-4o-mini(1500次/天), gpt-4o(500次/天), gpt-4.1, gpt-4.1-mini, etc.
+  model: gpt-4o-mini
   # 温度参数 (0.0-2.0)，越高越创造性
   temperature: 0.7
   # 最大生成token数
